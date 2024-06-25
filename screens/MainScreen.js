@@ -35,6 +35,7 @@ const MainScreen = ({ navigation, route }) => {
 
   const loadImages = async () => {
     try {
+      
       const images = [
         require('../assets/img/egg1.jpg'),
         require('../assets/img/egg2.jpg'),
@@ -42,6 +43,7 @@ const MainScreen = ({ navigation, route }) => {
         require('../assets/img/egg4.jpg'),
         require('../assets/img/sample.jpg'),
         require('../assets/img/receipt2222.jpg'),
+        
       ];
       setImageList(images);
     } catch (error) {
@@ -58,7 +60,7 @@ const MainScreen = ({ navigation, route }) => {
       if (!imageSrc) throw new Error("Invalid image source");
 
       console.log("Uploading photo:", imageSrc);
-
+      
       const file = {
         uri: imageSrc,
         type: 'image/jpeg',
@@ -97,7 +99,7 @@ const MainScreen = ({ navigation, route }) => {
   const processUploadImage = async (imageSrc1, imageSrc2) => {
     try {
       console.log("Processing images:", imageSrc1, imageSrc2);
-
+      
       const responseImageSrc1 = await uploadPhoto(imageSrc1, 'https://fridge.damecon.org/food_detection');
       console.log("Response for egg1:", responseImageSrc1);
 
@@ -118,38 +120,34 @@ const MainScreen = ({ navigation, route }) => {
       food['category'] = foodName;
 
       if (depth < 0) {
+        console.log("Depth is positive, processing egg1");
         await cropAndSaveImage(imageSrc1, responseImageSrc1[0]['bbox'], foodName);
         await dataProcessing();
       } else if (depth > 0) {
-        console.log("delete");
-        console.log(items);
+        console.log("Depth is negative, processing egg2");
+        console.log("Current items:", items);
         const newItems = { ...items };
         for (const key in newItems) {
-          console.log(newItems[key]["itemName"]);
+          console.log("Item:", newItems[key]["itemName"]);
           if (newItems[key]["itemName"] === food['name']) {
-            newItems[key]["stock"]--;
             if (newItems[key]["stock"] < 1) {
-              Alert.alert(
-                "삭제하기", 
-                `${food['name']}을(를) 삭제하시겠습니까?`, 
-                [
-                  { text: '취소' },
-                  { 
-                    text: "삭제", 
-                    onPress: () => {
-                      delete newItems[key];
-                      setItems(newItems);
-                    }
+              Alert.alert("삭제하기", `${food['name']}을(를) 삭제하시겠습니까?`, [
+                { text: '취소' },
+                {
+                  text: "삭제", onPress: () => {
+                    delete newItems[key];
+                    setItems(newItems);
                   }
-                ]
-              );
+                }
+              ]);
             } else {
+              newItems[key]["stock"] -= 1;
               setItems(newItems);
             }
           }
         }
       }
-
+      
       console.log("Food after processing:", food);
       console.log("Items after processing:", items);
       console.log("processUploadPhoto End");
@@ -166,7 +164,7 @@ const MainScreen = ({ navigation, route }) => {
       const targetSize = { height: 80, width: 80 };
 
       console.log(`Cropping image at path: ${imagePath}, region: ${JSON.stringify(cropRegion)}, target size: ${JSON.stringify(targetSize)}`);
-
+      
       const croppedImagePath = await RNPhotoManipulator.crop(imagePath, cropRegion, targetSize);
       console.log(`Result image path: ${croppedImagePath}`);
 
@@ -326,24 +324,21 @@ const MainScreen = ({ navigation, route }) => {
   const handleEggButton = () => {
     setSelectedEgg1(null);
     setSelectedEgg2(null);
-    setSelectedReceipt(null); // OCR 선택 초기화
     setImageSelectVisible(true);
   };
 
   const handleReceiptButton = () => {
     setSelectedReceipt(null);
-    setSelectedEgg1(null); // Egg 선택 초기화
-    setSelectedEgg2(null); // Egg 선택 초기화
     setImageSelectVisible(true);
   };
 
   const handleImageSelect = (imageUri) => {
-    if (!selectedReceipt && !selectedEgg1 && !selectedEgg2) {
-      setSelectedReceipt(imageUri);
-    } else if (!selectedEgg1) {
+    if (!selectedEgg1 && !selectedReceipt) {
       setSelectedEgg1(imageUri);
-    } else if (!selectedEgg2) {
+    } else if (!selectedEgg2 && !selectedReceipt) {
       setSelectedEgg2(imageUri);
+    } else {
+      setSelectedReceipt(imageUri);
     }
   };
 
@@ -370,8 +365,6 @@ const MainScreen = ({ navigation, route }) => {
         throw new Error("유효하지 않은 서버 응답");
       }
       
-      // Further processing of receipt image here
-
       console.log("processUploadReceipt End");
     } catch (error) {
       console.error("processUploadReceipt Error: ", error);
