@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     flex:1,
     padding:40,
     justifyContent:"space-between",
-    backgroundColor:"#FA00FF", 
+    backgroundColor:"#FFFFFF", 
   },
   itemCard:{
     borderRadius:10,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     width:150
   },
   memoButtonStyle:{
-    backgroundColor:"#000AEF", 
+    backgroundColor:"#FFFFFF", 
     alignItems:"center", 
     borderRadius:15, 
     padding:5, 

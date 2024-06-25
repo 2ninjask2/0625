@@ -17,6 +17,8 @@ const MainScreen = ({ navigation, route }) => {
   const [currentItem, setCurrentItem] = useState(null);
   const [selectedEgg1, setSelectedEgg1] = useState(null);
   const [selectedEgg2, setSelectedEgg2] = useState(null);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [imageList, setImageList] = useState([]);
   const className = require('../assets/eng2kor.json');
 
   useEffect(() => {
@@ -27,9 +29,28 @@ const MainScreen = ({ navigation, route }) => {
     saveItems(items);
   }, [items]);
 
-  const getImageUri = (localAsset) => {
-    const uri = Image.resolveAssetSource(localAsset).uri;
-    return uri.replace('/assets/assets', '/assets'); 
+  useEffect(() => {
+    loadImages();
+  }, []);
+
+  const loadImages = async () => {
+    try {
+      const images = [
+        require('../assets/img/egg1.jpg'),
+        require('../assets/img/egg2.jpg'),
+        require('../assets/img/egg3.jpg'),
+        require('../assets/img/egg4.jpg'),
+        require('../assets/img/sample.jpg'),
+        require('../assets/img/receipt2222.jpg'),
+      ];
+      setImageList(images);
+    } catch (error) {
+      console.error("Failed to load images from assets folder:", error);
+    }
+  };
+
+  const getImageUri = (image) => {
+    return Image.resolveAssetSource(image).uri;
   };
 
   const uploadPhoto = async (imageSrc, url) => {
@@ -37,7 +58,7 @@ const MainScreen = ({ navigation, route }) => {
       if (!imageSrc) throw new Error("Invalid image source");
 
       console.log("Uploading photo:", imageSrc);
-      
+
       const file = {
         uri: imageSrc,
         type: 'image/jpeg',
@@ -76,7 +97,7 @@ const MainScreen = ({ navigation, route }) => {
   const processUploadImage = async (imageSrc1, imageSrc2) => {
     try {
       console.log("Processing images:", imageSrc1, imageSrc2);
-      
+
       const responseImageSrc1 = await uploadPhoto(imageSrc1, 'https://fridge.damecon.org/food_detection');
       console.log("Response for egg1:", responseImageSrc1);
 
@@ -96,29 +117,39 @@ const MainScreen = ({ navigation, route }) => {
       food['name'] = foodName;
       food['category'] = foodName;
 
-      if (depth > 0) {
-        console.log("Depth is positive, processing egg1");
+      if (depth < 0) {
         await cropAndSaveImage(imageSrc1, responseImageSrc1[0]['bbox'], foodName);
         await dataProcessing();
-      } else if (depth < 0) {
-        console.log("Depth is negative, processing egg2");
-        console.log("Current items:", items);
+      } else if (depth > 0) {
+        console.log("delete");
+        console.log(items);
         const newItems = { ...items };
         for (const key in newItems) {
-          console.log("Item:", newItems[key]["itemName"]);
+          console.log(newItems[key]["itemName"]);
           if (newItems[key]["itemName"] === food['name']) {
-            Alert.alert("삭제하기", `${food['name']}을(를) 삭제하시겠습니까?`, [
-              { text: '취소' },
-              {
-                text: "삭제", onPress: () => {
-                  delete newItems[key];
-                  setItems(newItems);
-                }
-              }
-            ]);
+            newItems[key]["stock"]--;
+            if (newItems[key]["stock"] < 1) {
+              Alert.alert(
+                "삭제하기", 
+                `${food['name']}을(를) 삭제하시겠습니까?`, 
+                [
+                  { text: '취소' },
+                  { 
+                    text: "삭제", 
+                    onPress: () => {
+                      delete newItems[key];
+                      setItems(newItems);
+                    }
+                  }
+                ]
+              );
+            } else {
+              setItems(newItems);
+            }
           }
         }
       }
+
       console.log("Food after processing:", food);
       console.log("Items after processing:", items);
       console.log("processUploadPhoto End");
@@ -135,7 +166,7 @@ const MainScreen = ({ navigation, route }) => {
       const targetSize = { height: 80, width: 80 };
 
       console.log(`Cropping image at path: ${imagePath}, region: ${JSON.stringify(cropRegion)}, target size: ${JSON.stringify(targetSize)}`);
-      
+
       const croppedImagePath = await RNPhotoManipulator.crop(imagePath, cropRegion, targetSize);
       console.log(`Result image path: ${croppedImagePath}`);
 
@@ -295,11 +326,21 @@ const MainScreen = ({ navigation, route }) => {
   const handleEggButton = () => {
     setSelectedEgg1(null);
     setSelectedEgg2(null);
+    setSelectedReceipt(null); // OCR 선택 초기화
+    setImageSelectVisible(true);
+  };
+
+  const handleReceiptButton = () => {
+    setSelectedReceipt(null);
+    setSelectedEgg1(null); // Egg 선택 초기화
+    setSelectedEgg2(null); // Egg 선택 초기화
     setImageSelectVisible(true);
   };
 
   const handleImageSelect = (imageUri) => {
-    if (!selectedEgg1) {
+    if (!selectedReceipt && !selectedEgg1 && !selectedEgg2) {
+      setSelectedReceipt(imageUri);
+    } else if (!selectedEgg1) {
       setSelectedEgg1(imageUri);
     } else if (!selectedEgg2) {
       setSelectedEgg2(imageUri);
@@ -307,7 +348,10 @@ const MainScreen = ({ navigation, route }) => {
   };
 
   const handleImageSelectionConfirm = () => {
-    if (selectedEgg1 && selectedEgg2) {
+    if (selectedReceipt) {
+      setImageSelectVisible(false);
+      processUploadReceipt(selectedReceipt);
+    } else if (selectedEgg1 && selectedEgg2) {
       setImageSelectVisible(false);
       processUploadImage(selectedEgg1, selectedEgg2);
     } else {
@@ -315,18 +359,22 @@ const MainScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleReceiptButton = async () => {
+  const processUploadReceipt = async (imageSrc) => {
     try {
-      const imageSrc = getImageUri(require('../assets/img/receipt1.jpg'));
-      if (!imageSrc) throw new Error("Invalid image source");
-      console.log("Receipt button clicked, processing image:", imageSrc);
-
+      console.log("Processing receipt image:", imageSrc);
+      
       const responseImageSrc = await uploadPhoto(imageSrc, 'https://fridge.damecon.org/ocr');
-      if (!responseImageSrc || responseImageSrc.length === 0) throw new Error("Invalid response from uploadPhoto");
+      console.log("Response for receipt:", responseImageSrc);
 
-      console.log("Response for receipt1:", responseImageSrc);
+      if (!responseImageSrc || responseImageSrc.length === 0) {
+        throw new Error("유효하지 않은 서버 응답");
+      }
+      
+      // Further processing of receipt image here
+
+      console.log("processUploadReceipt End");
     } catch (error) {
-      console.error("Receipt Button Error: ", error);
+      console.error("processUploadReceipt Error: ", error);
     }
   };
 
@@ -371,15 +419,11 @@ const MainScreen = ({ navigation, route }) => {
         <View style={styles.modalContent}>
           <Text>이미지 선택</Text>
           <ScrollView>
-            <TouchableOpacity onPress={() => handleImageSelect(getImageUri(require('../assets/img/egg1.jpg')))}>
-              <Image source={require('../assets/img/egg1.jpg')} style={styles.imageThumbnail} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleImageSelect(getImageUri(require('../assets/img/egg2.jpg')))}>
-              <Image source={require('../assets/img/egg2.jpg')} style={styles.imageThumbnail} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleImageSelect(getImageUri(require('../assets/img/receipt1.jpg')))}>
-              <Image source={require('../assets/img/receipt1.jpg')} style={styles.imageThumbnail} />
-            </TouchableOpacity>
+            {imageList.map((image, index) => (
+              <TouchableOpacity key={index} onPress={() => handleImageSelect(getImageUri(image))}>
+                <Image source={image} style={styles.imageThumbnail} />
+              </TouchableOpacity>
+            ))}
           </ScrollView>
           <View style={styles.buttonContainer}>
             <Button title="취소" onPress={() => setImageSelectVisible(false)} />
@@ -408,8 +452,8 @@ const MainScreen = ({ navigation, route }) => {
       ) : null}
 
       <View style={styles.buttonContainer}>
-        <Button title="Process Egg1,2" onPress={handleEggButton} />
-        <Button title="Process Receipt1" onPress={handleReceiptButton} />
+        <Button title="갤러리" onPress={handleEggButton} />
+        <Button title="ocr" onPress={handleReceiptButton} />
       </View>
     </View>
   );
